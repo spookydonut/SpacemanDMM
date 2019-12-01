@@ -873,6 +873,7 @@ struct Var<'a> {
     type_: Option<VarType<'a>>,
     file: PathBuf,
     line: u32,
+    parent_def: Option<Var<'a>>,
 }
 
 #[derive(Serialize)]
@@ -890,6 +891,7 @@ struct Proc {
     params: Vec<Param>,
     file: PathBuf,
     line: u32,
+    parent_def: Option<Proc<'a>>,
 }
 
 #[derive(Serialize)]
