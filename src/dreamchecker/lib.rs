@@ -338,11 +338,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
         }
     });
 
-    for (proc, uses) in analyzer.proc_is_used.iter() {
-        if *uses == 0 {
-            println!("{:?} proc is unused", proc);
-        }
-    }
+    analyzer.check_unused_procs();
 
     analyzer.finish_check_kwargs();
 }
@@ -459,6 +455,20 @@ impl<'o> AnalyzeObjectTree<'o> {
             must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
             proc_is_used: Default::default(),
             used_kwargs: Default::default(),
+        }
+    }
+
+    pub fn check_unused_procs(&mut self) {
+        for (proc, uses) in self.proc_is_used.iter() {
+            if *uses == 0 {
+                if !proc.parent_proc().is_some() { //&& proc.ty().get().name == "" {
+                    if let Some(decl) = proc.get_declaration() {
+                        error(decl.location, format!("{}/{} proc is unused", proc.ty().get().path, proc.name()))
+                            .register(self.context);
+                    }
+                    //println!("{}/{} proc is unused {}", proc.ty().get().path, proc.name(), uses);
+                }
+            }
         }
     }
 
@@ -765,6 +775,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
+        //println!("{:#?}", statement);
         match statement {
             Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
             Statement::Return(Some(expr)) => {
@@ -1016,6 +1027,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
                     let ty = nav.ty();  // TODO: handle proc/verb paths here
+                    if let Some(procref) = nav.procref() {
+                        let mut next = Some(procref);
+                        while let Some(current) = next {
+                            if let Some(uses) = self.env.proc_is_used.get_mut(&current) {
+                                *uses = *uses+1;
+                            }
+                            next = current.parent_proc();
+                        }
+                        //println!("found procref {:?}", procref);
+                    }
+                    //println!("{:?} prefab, type is {:?}, nav {:?}", prefab, ty, nav);
                     let pop = dm::constants::Pop::from(ty.path.split("/").skip(1).map(ToOwned::to_owned).collect::<Vec<_>>());
                     Analysis {
                         static_ty: StaticType::None,
