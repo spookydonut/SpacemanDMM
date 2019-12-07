@@ -302,6 +302,11 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             if let Code::Present(ref code) = proc.get().code {
+                if let Some(decl) = proc.get_declaration() {
+                    if !decl.location.is_builtins() {
+                        analyzer.proc_is_used.insert(proc, 0);
+                    }
+                }
                 analyzer.gather_settings(proc, code);
             }
         }
@@ -332,6 +337,12 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
             analyzer.check_kwargs(proc);
         }
     });
+
+    for (proc, uses) in analyzer.proc_is_used.iter() {
+        if *uses == 0 {
+            println!("{:?} proc is unused", proc);
+        }
+    }
 
     analyzer.finish_check_kwargs();
 }
@@ -430,6 +441,7 @@ pub struct AnalyzeObjectTree<'o> {
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: ProcDirective<'o>,
     must_not_override: ProcDirective<'o>,
+    pub proc_is_used: HashMap<ProcRef<'o>, u32>,
     // Debug(ProcRef) -> KwargInfo
     used_kwargs: BTreeMap<String, KwargInfo>,
 }
@@ -445,6 +457,7 @@ impl<'o> AnalyzeObjectTree<'o> {
             return_type,
             must_call_parent: ProcDirective::new("SpacemanDMM_should_call_parent", true),
             must_not_override: ProcDirective::new("SpacemanDMM_should_not_override", false),
+            proc_is_used: Default::default(),
             used_kwargs: Default::default(),
         }
     }
@@ -1296,7 +1309,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         Analysis::empty()
     }
 
-    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
+    fn visit_call(&mut self, location: Location, src: TypeRef<'o>, proc: ProcRef<'o>, args: &'o [Expression], is_exact: bool) -> Analysis<'o> {
         // identify and register kwargs used
         let mut any_kwargs_yet = false;
 
@@ -1304,6 +1317,14 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         let mut param_idx_map = HashMap::new();
         let mut param_idx = 0;
         let mut arglist_used = false;
+
+        let mut next = Some(proc);
+        while let Some(current) = next {
+            if let Some(uses) = self.env.proc_is_used.get_mut(&current) {
+                *uses = *uses+1;
+            }
+            next = current.parent_proc();
+        }
 
         for arg in args {
             let mut argument_value = arg;
