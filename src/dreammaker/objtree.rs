@@ -492,6 +492,13 @@ impl<'o> NavigatePathResult<'o> {
         }
     }
 
+    pub fn procgroup(self) -> Option<TypeRef<'o>> {
+        match self {
+            NavigatePathResult::ProcGroup(typeref, _) => Some(typeref),
+            _ => None,
+        }
+    }
+
     pub fn to_path(self) -> Vec<String> {
         let mut path: Vec<String> = self.ty().path.split('/').skip(1).map(ToOwned::to_owned).collect();
         match self {

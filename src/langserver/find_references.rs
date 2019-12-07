@@ -432,6 +432,12 @@ impl<'o> WalkProc<'o> {
                     StaticType::None
                 }
             },
+            Term::TypesOf(_args) => {
+                StaticType::List{
+                    list: self.objtree.expect("/list"),
+                    keys: Box::new(StaticType::None),
+                }
+            }
 
             Term::New { type_, args } => {
                 // TODO: use /proc/new

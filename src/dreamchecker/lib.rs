@@ -302,11 +302,7 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
     objtree.root().recurse(&mut |ty| {
         for proc in ty.iter_self_procs() {
             if let Code::Present(ref code) = proc.get().code {
-                if let Some(decl) = proc.get_declaration() {
-                    if !decl.location.is_builtins() {
-                        analyzer.proc_is_used.insert(proc, 0);
-                    }
-                }
+                analyzer.setup_uses(proc);
                 analyzer.gather_settings(proc, code);
             }
         }
@@ -328,6 +324,8 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
         }
     });
 
+    analyzer.check_unused_procs();
+
     cli_println!("Procs analyzed: {}. Errored: {}. Builtins: {}.\n", present, invalid, builtin);
 
     cli_println!("============================================================");
@@ -337,8 +335,6 @@ fn run_inner(context: &Context, objtree: &ObjectTree, cli: bool) {
             analyzer.check_kwargs(proc);
         }
     });
-
-    analyzer.check_unused_procs();
 
     analyzer.finish_check_kwargs();
 }
@@ -497,6 +493,17 @@ impl<'o> AnalyzeObjectTree<'o> {
                 }
             },
             Err(error) => self.context.register_error(error),
+        }
+    }
+
+    /// Gather and store set directives for the given proc using the provided code body
+    pub fn setup_uses(&mut self, proc: ProcRef<'o>) {
+        if let Some(decl) = proc.get_declaration() {
+            if ProcDeclKind::Verb == decl.kind {
+                self.proc_is_used.insert(proc, 1);
+            } else if !decl.location.is_builtins() {
+                self.proc_is_used.insert(proc, 0);
+            }
         }
     }
 
@@ -999,6 +1006,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
+    fn mark_proc_as_used(&mut self, procref: ProcRef<'o>) {
+        let mut next = Some(procref);
+        while let Some(current) = next {
+            if let Some(uses) = self.env.proc_is_used.get_mut(&current) {
+                *uses = *uses+1;
+            }
+            next = current.parent_proc();
+        }
+    }
+
     fn visit_term(&mut self, location: Location, term: &'o Term, type_hint: Option<TypeRef<'o>>) -> Analysis<'o> {
         match term {
             Term::Null => Analysis::null(),
@@ -1026,15 +1043,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             Term::Expr(expr) => self.visit_expression(location, expr, type_hint),
             Term::Prefab(prefab) => {
                 if let Some(nav) = self.ty.navigate_path(&prefab.path) {
+                    //println!("{:#?}",nav);
                     let ty = nav.ty();  // TODO: handle proc/verb paths here
                     if let Some(procref) = nav.procref() {
-                        let mut next = Some(procref);
-                        while let Some(current) = next {
-                            if let Some(uses) = self.env.proc_is_used.get_mut(&current) {
-                                *uses = *uses+1;
-                            }
-                            next = current.parent_proc();
-                        }
+                        self.mark_proc_as_used(procref);
                         //println!("found procref {:?}", procref);
                     }
                     //println!("{:?} prefab, type is {:?}, nav {:?}", prefab, ty, nav);
@@ -1099,6 +1111,32 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     Analysis::empty()
                 }
             },
+            Term::TypesOf(args) => {
+                let src = self.ty;
+                if let Some(proc) = self.ty.get_proc("typesof") {
+                    for arg in args {
+                        if let Expression::Base { unary, term, follow } = arg {
+                            if let Term::Prefab(prefab) = &term.elem {
+                                if let Some(nav) = self.ty.navigate_path(&prefab.path) {
+                                    if let Some(typeref) = nav.procgroup() {
+                                        for procref in typeref.iter_self_procs() {
+                                            if let Some(decl) = procref.get_declaration() {
+                                                if procref.get().location != decl.location {
+                                                    continue
+                                                }
+                                                self.mark_proc_as_used(procref);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    self.visit_call(location, src, proc, args, false)
+                } else {
+                    Analysis::empty()
+                }
+            }
 
             Term::New { type_, args } => {
                 // determine the type being new'd
@@ -1340,13 +1378,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         let mut param_idx = 0;
         let mut arglist_used = false;
 
-        let mut next = Some(proc);
-        while let Some(current) = next {
-            if let Some(uses) = self.env.proc_is_used.get_mut(&current) {
-                *uses = *uses+1;
-            }
-            next = current.parent_proc();
-        }
+        self.mark_proc_as_used(proc);
 
         for arg in args {
             let mut argument_value = arg;

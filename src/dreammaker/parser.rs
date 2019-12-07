@@ -1927,7 +1927,11 @@ impl<'ctx, 'an, 'inp> Parser<'ctx, 'an, 'inp> {
                 match self.arguments(&[], &i)? {
                     Some(args) => {
                         self.annotate_precise(start..first_token, || Annotation::UnscopedCall(i.clone()));
-                        Term::Call(i, args)
+                        if i == "typesof" {
+                            Term::TypesOf(args)
+                        } else {
+                            Term::Call(i, args)
+                        }
                     },
                     None => {
                         belongs_to.push(i.clone());

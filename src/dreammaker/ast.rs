@@ -439,6 +439,8 @@ pub enum Term {
     SelfCall(Vec<Expression>),
     /// A `..()` call. If arguments is empty, the proc's arguments are passed.
     ParentCall(Vec<Expression>),
+    /// A typesof() call, because path usage evaluation
+    TypesOf(Vec<Expression>),
     /// A `new` call.
     New {
         /// The type to be instantiated.
