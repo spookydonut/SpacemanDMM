@@ -480,6 +480,15 @@ impl From<Expression> for Term {
     }
 }
 
+impl Term {
+    pub fn get_ident(&self) -> Option<String> {
+        if let Term::Ident(unscoped_name) = self {
+            return Some(unscoped_name.to_string())
+        }
+        None
+    }
+}
+
 /// The possible kinds of index operators, for both fields and methods.
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum IndexKind {

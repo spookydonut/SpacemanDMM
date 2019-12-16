@@ -160,6 +160,28 @@ impl<'o> AssumptionSet<'o> {
         }
         None
     }
+
+    fn is_null(&self) -> Option<bool> {
+        for each in self.set.iter() {
+            if let Assumption::IsNull(nullness) = each {
+                return Some(*nullness)
+            }
+        }
+        return None
+    }
+
+    fn set_nullness(&mut self, nullness: Option<bool>) {
+        match nullness {
+            Some(nullness) => {
+                self.set.remove(&Assumption::IsNull(!nullness));
+                self.set.insert(Assumption::IsNull(nullness));
+            },
+            None => {
+                self.set.remove(&Assumption::IsNull(true));
+                self.set.remove(&Assumption::IsNull(false));
+            }
+        }
+    }
 }
 
 /// An 'atom' in the type analysis. A type/set of possible types, as well as a
@@ -546,6 +568,7 @@ pub fn check_var_defs(objtree: &ObjectTree, context: &Context) {
 // ----------------------------------------------------------------------------
 // Procedure analyzer
 
+#[derive(Debug)]
 struct LocalVar<'o> {
     location: Location,
     analysis: Analysis<'o>,
@@ -638,6 +661,8 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
     }
 
     fn visit_statement(&mut self, location: Location, statement: &'o Statement) {
+        //println!("{:#?}", statement);
+        //println!("{:#?}", self.local_vars);
         match statement {
             Statement::Expr(expr) => { self.visit_expression(location, expr, None); },
             Statement::Return(Some(expr)) => {
@@ -684,6 +709,10 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 if let Some(var_type) = var_type {
                     self.visit_var(location, var_type, name, None);
                 }
+                if let Some(localvar) = self.local_vars.get_mut(name) {
+                    localvar.analysis.aset.set_nullness(Some(false));
+                }
+                //println!("{:#?}", self.local_vars);
                 self.visit_block(block);
             },
             Statement::ForRange { var_type, name, start, end, step, block } => {
@@ -767,10 +796,13 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         // Visit the expression if it's there
         let mut analysis = match value {
             Some(ref expr) => self.visit_expression(location, expr, static_type.basic_type()),
-            None => Analysis::null(),
+            None => {
+                //println!("null");
+                Analysis::null()
+            },
         };
         analysis.static_ty = static_type;
-
+        //println!("{:#?}", analysis);
         // Save var to locals
         self.local_vars.insert(name.to_owned(), LocalVar { location, analysis });
     }
@@ -785,6 +817,17 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 };
                 let mut ty = self.visit_term(term.location, &term.elem, base_type_hint);
                 for each in follow.iter() {
+                    if let Some(unscoped_name) = term.elem.get_ident() {
+                        if let Some(var) = self.local_vars.get_mut(&unscoped_name) {
+                            match var.analysis.aset.is_null() {
+                                Some(true) => {
+                                    error(location, "attemping follow on a null reference")
+                                        .register(self.context);
+                                },
+                                _ => (),
+                            }
+                        }
+                    }
                     ty = self.visit_follow(each.location, ty, &each.elem);
                 }
                 for each in unary.iter().rev() {
@@ -844,8 +887,16 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                 self.visit_binary(lty, rty, *op)
             },
             Expression::AssignOp { lhs, rhs, .. } => {
-                let lhs = self.visit_expression(location, lhs, None);
-                self.visit_expression(location, rhs, lhs.static_ty.basic_type())
+                let lhsanalysis = self.visit_expression(location, lhs, None);
+                let rhsanalysis = self.visit_expression(location, rhs, lhsanalysis.static_ty.basic_type());
+                if let Some(term) = lhs.as_term() {
+                    if let Term::Ident(unscoped_name) = term {
+                        if let Some(var) = self.local_vars.get_mut(unscoped_name) {
+                            var.analysis.aset.set_nullness(rhsanalysis.aset.is_null());
+                        }
+                    }
+                }
+                rhsanalysis
             },
             Expression::TernaryOp { cond, if_, else_ } => {
                 // TODO: be sensible
