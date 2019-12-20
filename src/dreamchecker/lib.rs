@@ -307,9 +307,51 @@ struct KwargInfo {
     bad_overrides_at: BTreeMap<String, BadOverride>,
 }
 
+#[derive(Default)]
+struct CallLocations<'o> {
+    calls_procs: HashMap<ProcRef<'o>, Vec<Location>>,
+}
+
+impl<'o> CallLocations<'o> {
+    fn add_proc_call(&mut self, proc_called: ProcRef<'o>, location: Location) {
+        if !self.calls_procs.contains_key(proc_called) {
+        
+        }
+        let locvec = match self.calls_procs.get(&proc_called) {
+            Some(vec) => vec,
+            None => Vec::<Location>::new(),
+        };
+        locvec.push(location);
+        self.calls_procs.insert(proc_called, locvec.to_vec());
+    }
+}
+
+#[derive(Default)]
+struct CallTree<'o> {
+    call_tree: HashMap<ProcRef<'o>, CallLocations<'o>>,
+}
+
+impl<'o> CallTree<'o> {
+    fn add_proc_call(&mut self, proc: ProcRef<'o>, proc_called: ProcRef<'o>, location: Location) {
+        let callloc = match self.call_tree.get_mut(&proc) {
+            Some(calllocations) => calllocations,
+            None => self.add_new_proc(proc),
+        };
+        callloc.add_proc_call(proc_called, location);
+    }
+
+    #[inline]
+    fn add_new_proc(&mut self, new_proc: ProcRef<'o>) -> &mut CallLocations<'o> {
+        let mut newcallloc = CallLocations::default();
+        self.call_tree.insert(new_proc, newcallloc);
+        &mut newcallloc
+    }
+}
+
 pub struct AnalyzeObjectTree<'o> {
     context: &'o Context,
     objtree: &'o ObjectTree,
+    call_tree: CallTree<'o>,
 
     return_type: HashMap<ProcRef<'o>, TypeExpr<'o>>,
     must_call_parent: HashMap<ProcRef<'o>, (bool, Location)>,
@@ -326,6 +368,7 @@ impl<'o> AnalyzeObjectTree<'o> {
         AnalyzeObjectTree {
             context,
             objtree,
+            call_tree: Default::default(),
             return_type,
             must_call_parent: Default::default(),
             must_not_override: Default::default(),
