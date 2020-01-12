@@ -499,7 +499,7 @@ impl<'o> AnalyzeObjectTree<'o> {
     /// Gather and store set directives for the given proc using the provided code body
     pub fn setup_uses(&mut self, proc: ProcRef<'o>) {
         if let Some(decl) = proc.get_declaration() {
-            if ProcDeclKind::Verb == decl.kind {
+            if ProcDeclKind::Verb == decl.kind || proc.name().starts_with("_") {
                 self.proc_is_used.insert(proc, 1);
             } else if !decl.location.is_builtins() {
                 self.proc_is_used.insert(proc, 0);
