@@ -3,6 +3,7 @@
 //! Most AST types can be pretty-printed using the `Display` trait.
 use std::fmt;
 use std::iter::FromIterator;
+use phf::phf_map;
 
 use linked_hash_map::LinkedHashMap;
 
@@ -897,3 +898,25 @@ pub const KNOWN_SETTING_NAMES: &[&str] = &[
     // undocumented
     "waitfor",
 ];
+
+pub enum ArgumentType {
+    String,
+    Int,
+    Float,
+    ZeroToOne,
+    Direction,
+    DirectionOrZero,
+}
+
+/*
+
+turn => [
+            ("Dir", ArgumentType::Direction), 
+            ("Angle", ArgumentType::Int)]
+walk => [
+            (), 
+            ("Dir", ArgumentType::DirectionOrZero),
+            ("Lag", ArgumentType::Int),
+            ("Speed", ArgumentType::Int)]
+
+*/
