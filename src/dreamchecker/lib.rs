@@ -1371,6 +1371,23 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             }
 
             let analysis = self.visit_expression(location, argument_value, None);
+
+            if !any_kwargs_yet && proc.name() != "addtimer" {
+                if let Some(procparam) = proc.parameters.get(param_idx) {
+                    if let Ok(paramtype) = static_type(self.objtree, location, &procparam.var_type.type_path) {
+                        match (&analysis.static_ty, paramtype) {
+                            (StaticType::None, StaticType::Type(_)) => {
+                                error(location, format!("{} passing not a reference to a reference parameter {} proc: {}", self.proc_ref, procparam.name, proc.name()))
+                                    .register(self.context);
+                            },
+                            (_, _) => {},
+                        }
+                    }
+
+                    //println!("{:#?}", procparam);
+                }
+            }
+
             if let Some(kw) = this_kwarg {
                 param_name_map.insert(kw.as_str(), analysis);
             } else {
