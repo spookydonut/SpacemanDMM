@@ -10,6 +10,10 @@ use serde::Deserialize;
 use crate::error::Severity;
 use crate::DMError;
 
+fn default_true() -> bool {
+    true
+}
+
 /// Struct for deserializing from a config TOML
 #[derive(Deserialize, Default, Debug, Clone)]
 #[serde(default)]
@@ -46,6 +50,8 @@ pub struct CodeStandards {
 #[derive(Deserialize, Default, Debug, Clone)]
 pub struct DMDoc {
     pub use_typepath_names: bool,
+    #[serde(default="default_true")]
+    pub show_repo_links: bool,
 }
 
 /// Severity overrides from configuration

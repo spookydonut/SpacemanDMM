@@ -593,8 +593,10 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| &s[..])
         .unwrap_or(world_name);
     let mut git = Default::default();
-    if let Err(e) = git_info(&mut git) {
-        println!("incomplete git info: {}", e);
+    if context.config().dmdoc.show_repo_links {
+        if let Err(e) = git_info(&mut git) {
+            println!("incomplete git info: {}", e);
+        }
     }
     let env = &Environment {
         dmdoc: DmDoc {

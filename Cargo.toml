@@ -2,6 +2,7 @@
 members = [
     "src/cli",
     "src/dmdoc",
+    "src/dmdocdiffbot",
     "src/dreamchecker",
     "src/dreammaker",
     "src/editor",
