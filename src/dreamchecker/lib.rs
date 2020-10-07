@@ -1480,8 +1480,12 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                     None
                 };
                 let mut ty = self.visit_term(term.location, &term.elem, base_type_hint, local_vars);
+                let mut src = false;
+                if let Term::Ident(unscoped_name) = &term.elem {
+                    src = unscoped_name == "src"
+                }
                 for each in follow.iter() {
-                    ty = self.visit_follow(each.location, ty, &each.elem, local_vars);
+                    ty = self.visit_follow(each.location, ty, &each.elem, local_vars, src);
                 }
                 for each in unary.iter().rev() {
                     ty = self.visit_unary(ty, each, location, local_vars);
@@ -1788,7 +1792,26 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
         }
     }
 
-    fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>>) -> Analysis<'o> {
+    fn visit_follow(&mut self, location: Location, lhs: Analysis<'o>, rhs: &'o Follow, local_vars: &mut HashMap<String, LocalVar<'o>>, src: bool) -> Analysis<'o> {
+        if src {
+            match rhs {
+                Follow::Call(_, _, _) => {
+                    error(location, "src.procname()")
+                        .set_severity(Severity::Warning)
+                        .register(self.context);
+                    return Analysis::empty()
+                },
+                Follow::Field(_, name) => {
+                    if local_vars.get(name).is_none() {
+                        error(location, "src.varname")
+                            .set_severity(Severity::Warning)
+                            .register(self.context);
+                        return Analysis::empty()
+                    }
+                },
+                _ => {},
+            }
+        }
         match rhs {
             Follow::Field(IndexKind::Colon, _) => Analysis::empty(),
             Follow::Field(IndexKind::SafeColon, _) => Analysis::empty(),
