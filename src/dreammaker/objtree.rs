@@ -77,6 +77,7 @@ pub struct ProcDeclaration {
     pub id: SymbolId,
     pub is_private: bool,
     pub is_protected: bool,
+    pub is_setter: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1069,6 +1070,7 @@ impl ObjectTree {
                     id: self.symbols.allocate(),
                     is_private: false,
                     is_protected: false,
+                    is_setter: false,
                 });
             }
         }

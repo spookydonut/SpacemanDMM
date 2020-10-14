@@ -817,7 +817,7 @@ type_table! {
 
 bitflags! {
     #[derive(Default)]
-    pub struct VarTypeFlags: u8 {
+    pub struct VarTypeFlags: u16 {
         // DM flags
         const STATIC = 1 << 0;
         const CONST = 1 << 2;
@@ -826,6 +826,8 @@ bitflags! {
         const FINAL = 1 << 4;
         const PRIVATE = 1 << 5;
         const PROTECTED = 1 << 6;
+        const PRIVATESETTER = 1 << 7;
+        const PROTECTEDSETTER = 1 << 8;
     }
 }
 
@@ -840,6 +842,8 @@ impl VarTypeFlags {
             "SpacemanDMM_final" => Some(VarTypeFlags::FINAL),
             "SpacemanDMM_private" => Some(VarTypeFlags::PRIVATE),
             "SpacemanDMM_protected" => Some(VarTypeFlags::PROTECTED),
+            "SpacemanDMM_private_setter" => Some(VarTypeFlags::PRIVATESETTER),
+            "SpacemanDMM_protected_setter" => Some(VarTypeFlags::PROTECTEDSETTER),
             // Fallback
             _ => None,
         }
@@ -876,6 +880,21 @@ impl VarTypeFlags {
     }
 
     #[inline]
+    pub fn is_setter(&self) -> bool {
+        self.contains(VarTypeFlags::PRIVATESETTER) || self.contains(VarTypeFlags::PROTECTEDSETTER)
+    }
+
+    #[inline]
+    pub fn is_private_setter(&self) -> bool {
+        self.contains(VarTypeFlags::PRIVATESETTER)
+    }
+
+    #[inline]
+    pub fn is_protected_setter(&self) -> bool {
+        self.contains(VarTypeFlags::PROTECTEDSETTER)
+    }
+
+    #[inline]
     pub fn is_const_evaluable(&self) -> bool {
         self.contains(VarTypeFlags::CONST) || !self.intersects(VarTypeFlags::STATIC | VarTypeFlags::PROTECTED)
     }
@@ -893,6 +912,8 @@ impl VarTypeFlags {
         if self.is_final() { v.push("SpacemanDMM_final"); }
         if self.is_private() { v.push("SpacemanDMM_private"); }
         if self.is_protected() { v.push("SpacemanDMM_protected"); }
+        if self.is_private_setter() { v.push("SpacemanDMM_private_setter"); }
+        if self.is_protected_setter() { v.push("SpacemanDMM_protected_setter"); }
         v
     }
 }
@@ -916,6 +937,12 @@ impl fmt::Display for VarTypeFlags {
         }
         if self.is_protected() {
             fmt.write_str("SpacemanDMM_protected/")?;
+        }
+        if self.is_private_setter() {
+            fmt.write_str("SpacemanDMM_private_setter/")?;
+        }
+        if self.is_protected_setter() {
+            fmt.write_str("SpacemanDMM_protected_setter/")?;
         }
         Ok(())
     }

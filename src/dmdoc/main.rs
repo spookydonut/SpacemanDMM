@@ -471,6 +471,8 @@ fn main2() -> Result<(), Box<dyn std::error::Error>> {
                     is_final: decl.var_type.flags.is_final(),
                     is_private: decl.var_type.flags.is_private(),
                     is_protected: decl.var_type.flags.is_protected(),
+                    is_private_setter: decl.var_type.flags.is_private_setter(),
+                    is_protected_setter: decl.var_type.flags.is_protected_setter(),
                     path: &decl.var_type.type_path,
                 });
                 parsed_type.vars.insert(name, Var {
@@ -1176,6 +1178,8 @@ struct VarType<'a> {
     is_final: bool,
     is_private: bool,
     is_protected: bool,
+    is_private_setter: bool,
+    is_protected_setter: bool,
     path: &'a [String],
 }
 

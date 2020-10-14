@@ -192,6 +192,7 @@ pub struct Analysis<'o> {
     value: Option<Constant>,
     fix_hint: Option<(Location, String)>,
     is_impure: Option<bool>,
+    is_setter: Option<bool>,
 }
 
 impl<'o> Analysis<'o> {
@@ -202,6 +203,7 @@ impl<'o> Analysis<'o> {
             value: None,
             fix_hint: None,
             is_impure: None,
+            is_setter: None,
         }
     }
 
@@ -212,6 +214,7 @@ impl<'o> Analysis<'o> {
             value: Some(Constant::Null(None)),
             fix_hint: None,
             is_impure: None,
+            is_setter: None,
         }
     }
 
@@ -232,6 +235,7 @@ impl<'o> Analysis<'o> {
             value: Some(value),
             fix_hint: None,
             is_impure: None,
+            is_setter: None,
         }
     }
 
@@ -239,6 +243,11 @@ impl<'o> Analysis<'o> {
         if location != Location::default() {
             self.fix_hint = Some((location, desc.into()));
         }
+        self
+    }
+
+    fn with_setter_state(mut self, setterstate: bool) -> Self {
+        self.is_setter = Some(setterstate);
         self
     }
 }
@@ -1632,6 +1641,21 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
             },
             Expression::AssignOp { lhs, rhs, .. } => {
                 let lhs = self.visit_expression(location, lhs, None, local_vars);
+                if let Some(true) = lhs.is_setter {
+                    if ty != self.ty && decl.var_type.flags.is_private() {
+                        error(location, format!("field {:?} on {} is declared as private_setter", name, ty))
+                            .with_errortype("private_var")
+                            .set_severity(Severity::Warning)
+                            .with_note(decl.location, "definition is here")
+                            .register(self.context);
+                    } else if !self.ty.is_subtype_of(ty.get()) && decl.var_type.flags.is_protected() {
+                        error(location, format!("field {:?} on {} is declared as protected_setter", name, ty))
+                            .with_errortype("protected_var")
+                            .set_severity(Severity::Warning)
+                            .with_note(decl.location, "definition is here")
+                            .register(self.context);
+                    }
+                }
                 if let Some(true) = lhs.is_impure {
                     self.env.impure_procs.insert_violator(self.proc_ref, "Assignment on purity breaking expression", location);
                 }
@@ -1921,6 +1945,7 @@ impl<'o, 's> AnalyzeProc<'o, 's> {
                         }
                         self.static_type(location, &decl.var_type.type_path)
                             .with_fix_hint(decl.location, "add additional type info here")
+                            .with_setter_state(decl.var_type.flags.is_setter())
                     } else {
                         error(location, format!("undefined field: {:?} on {}", name, ty))
                             .register(self.context);
